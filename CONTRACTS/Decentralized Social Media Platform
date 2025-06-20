@@ -1,0 +1,160 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+/**
+ * @title Decentralized Social Media Platform
+ * @dev A smart contract for a decentralized social media platform
+ * @author Your Name
+ */
+contract Project {
+    
+    // State variables
+    uint256 private postCounter;
+    address public owner;
+    
+    // Structs
+    struct Post {
+        uint256 id;
+        address author;
+        string content;
+        uint256 timestamp;
+        uint256 likes;
+        bool isActive;
+    }
+    
+    struct User {
+        address userAddress;
+        string username;
+        string bio;
+        uint256 postCount;
+        bool isRegistered;
+    }
+    
+    // Mappings
+    mapping(uint256 => Post) public posts;
+    mapping(address => User) public users;
+    mapping(uint256 => mapping(address => bool)) public postLikes;
+    mapping(address => uint256[]) public userPosts;
+    
+    // Events
+    event UserRegistered(address indexed user, string username);
+    event PostCreated(uint256 indexed postId, address indexed author, string content);
+    event PostLiked(uint256 indexed postId, address indexed liker);
+    
+    // Modifiers
+    modifier onlyRegistered() {
+        require(users[msg.sender].isRegistered, "User must be registered");
+        _;
+    }
+    
+    modifier postExists(uint256 _postId) {
+        require(_postId > 0 && _postId <= postCounter, "Post does not exist");
+        require(posts[_postId].isActive, "Post is not active");
+        _;
+    }
+    
+    constructor() {
+        owner = msg.sender;
+        postCounter = 0;
+    }
+    
+    /**
+     * @dev Core Function 1: Register a new user
+     * @param _username The username for the new user
+     * @param _bio The bio for the new user
+     */
+    function registerUser(string memory _username, string memory _bio) external {
+        require(!users[msg.sender].isRegistered, "User already registered");
+        require(bytes(_username).length > 0, "Username cannot be empty");
+        
+        users[msg.sender] = User({
+            userAddress: msg.sender,
+            username: _username,
+            bio: _bio,
+            postCount: 0,
+            isRegistered: true
+        });
+        
+        emit UserRegistered(msg.sender, _username);
+    }
+    
+    /**
+     * @dev Core Function 2: Create a new post
+     * @param _content The content of the post
+     */
+    function createPost(string memory _content) external onlyRegistered {
+        require(bytes(_content).length > 0, "Post content cannot be empty");
+        require(bytes(_content).length <= 500, "Post content too long");
+        
+        postCounter++;
+        
+        posts[postCounter] = Post({
+            id: postCounter,
+            author: msg.sender,
+            content: _content,
+            timestamp: block.timestamp,
+            likes: 0,
+            isActive: true
+        });
+        
+        userPosts[msg.sender].push(postCounter);
+        users[msg.sender].postCount++;
+        
+        emit PostCreated(postCounter, msg.sender, _content);
+    }
+    
+    /**
+     * @dev Core Function 3: Like or unlike a post
+     * @param _postId The ID of the post to like/unlike
+     */
+    function toggleLike(uint256 _postId) external onlyRegistered postExists(_postId) {
+        require(posts[_postId].author != msg.sender, "Cannot like your own post");
+        
+        if (postLikes[_postId][msg.sender]) {
+            // Unlike the post
+            postLikes[_postId][msg.sender] = false;
+            posts[_postId].likes--;
+        } else {
+            // Like the post
+            postLikes[_postId][msg.sender] = true;
+            posts[_postId].likes++;
+            emit PostLiked(_postId, msg.sender);
+        }
+    }
+    
+    // View functions
+    function getPost(uint256 _postId) external view postExists(_postId) returns (
+        uint256 id,
+        address author,
+        string memory content,
+        uint256 timestamp,
+        uint256 likes,
+        string memory authorUsername
+    ) {
+        Post memory post = posts[_postId];
+        return (
+            post.id,
+            post.author,
+            post.content,
+            post.timestamp,
+            post.likes,
+            users[post.author].username
+        );
+    }
+    
+    function getUserPosts(address _user) external view returns (uint256[] memory) {
+        return userPosts[_user];
+    }
+    
+    function getTotalPosts() external view returns (uint256) {
+        return postCounter;
+    }
+    
+    function isUserRegistered(address _user) external view returns (bool) {
+        return users[_user].isRegistered;
+    }
+    
+    function hasLikedPost(uint256 _postId, address _user) external view returns (bool) {
+        return postLikes[_postId][_user];
+    }
+}
